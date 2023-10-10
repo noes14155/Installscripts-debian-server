@@ -1,0 +1,369 @@
+services:
+  portainer:
+    container_name: portainer
+    image: portainer/portainer-ce:latest
+    restart: unless-stopped
+    command: -H unix:///var/run/docker.sock 
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro 
+      - ${DOCKERCONFDIR}/portainer/data:/data 
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=$TZ
+  bazarr:
+    image: lscr.io/linuxserver/bazarr
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${BAZARR_PORT_6767}:6767
+    container_name: bazarr
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${BAZARR_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/bazarr:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+      - ${MOVIES_DIR}:/Movies
+      - ${TVSHOWS_DIR}:/tvshows
+  deluge:
+    image: lscr.io/linuxserver/deluge
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${DELUGE_PORT_51413}:51413
+      - ${DELUGE_PORT_51413}:51413/udp
+      - ${DELUGE_PORT_58846}:58846
+      - ${DELUGE_PORT_58946}:58946
+      - ${DELUGE_PORT_6881}:6881
+      - ${DELUGE_PORT_6881}:6881/udp
+      - ${DELUGE_PORT_8112}:8112
+    container_name: deluge
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${DELUGE_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/deluge:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+      - ${DOWNLOAD_DIR}:/Downloads
+  glances:
+    image: nicolargo/glances
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${GLANCES_PORT_61208}:61208
+      - ${GLANCES_PORT_61209}:61209
+    container_name: glances
+    environment:
+      - GLANCES_OPT=-w
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    pid: host
+    restart: ${GLANCES_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DOCKERCONFDIR}/glances/glances.conf:/glances.conf
+      - ${DOCKERSTORAGEDIR}:/storage
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${DOCKERCONFDIR}/prowlarr:/config
+    ports:
+      - 9696:9696
+    restart: unless-stopped
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=$TZ}
+    ports:
+      - 8191:8191
+    restart: unless-stopped 
+  redis:
+    image: redis
+    container_name: redis
+    restart: always
+  mariadb:
+    image: lscr.io/linuxserver/mariadb
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${MARIADB_PORT_3306}:3306
+    container_name: mariadb
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MARIADB_MYSQL_ROOT_PASSWORD}
+      - MYSQL_PASSWORD=${MARIADB_MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MARIADB_AUTO_UPGRADE=1
+      - MARIADB_DISABLE_UPGRADE_BACKUP=1
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${MARIADB_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/mariadb:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+  nextcloud:
+    build:
+      context: ./nextcloud
+      dockerfile: DockerFile
+     #   image: nextcloud:apache
+    container_name: nextcloud
+    ports:
+      - 9050:9000
+    links:
+      - mariadb
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+      - MYSQL_PASSWORD=${MARIADB_MYSQL_PASSWORD}
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_HOST=mariadb
+      - NEXTCLOUD_ADMIN_USER=noes14155
+      - NEXTCLOUD_ADMIN_PASSWORD=${MARIADB_MYSQL_PASSWORD}
+      - REDIS_HOST=redis
+    volumes:
+      - /var/www/html/nextcloud:/var/www/html
+      - ${NEXTCLOUD_DATADIR}:/var/www/html/data
+      - /mnt/:/jav
+    restart: unless-stopped
+    hostname: mynextcloud.v6.rocks
+    devices:
+      - /dev/dri:/dev/dri
+    depends_on:
+      - mariadb
+      - redis
+  cron:
+    image: rcdailey/nextcloud-cronjob
+    container_name: cron
+    environment:
+      - NEXTCLOUD_CRON_MINUTE_INTERVAL=5
+      - NEXTCLOUD_CONTAINER_NAME=nextcloud
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /etc/localtime:/etc/localtime:ro
+    restart: always
+    depends_on:
+      - mariadb
+      - nextcloud
+  ombi:
+    image: lscr.io/linuxserver/ombi
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${OMBI_PORT_3579}:3579
+    container_name: ombi
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${OMBI_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/ombi:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+  organizr:
+    image: organizr/organizr
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${ORGANIZR_PORT_80}:80
+    container_name: organizr
+    environment:
+      - branch=${ORGANIZR_BRANCH}
+      - fpm=${ORGANIZR_FPM}
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${ORGANIZR_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/organizr:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+  radarr:
+    image: lscr.io/linuxserver/radarr
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${RADARR_PORT_7878}:7878
+    container_name: radarr
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${RADARR_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/radarr:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+      - ${MOVIES_DIR}:/Movies
+      - ${DOWNLOAD_DIR}:/Downloads
+  sonarr:
+    image: lscr.io/linuxserver/sonarr
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${SONARR_PORT_8989}:8989
+    container_name: sonarr
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${SONARR_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/sonarr:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+      - ${TVSHOWS_DIR}:/tvshows
+      - ${DOWNLOAD_DIR}:/Downloads
+  tautulli:
+    image: lscr.io/linuxserver/tautulli
+    hostname: ${DOCKERHOSTNAME}
+    ports:
+      - ${TAUTULLI_PORT_8181}:8181
+    container_name: tautulli
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: ${TAUTULLI_RESTART}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/tautulli:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+  openspeedtest:
+    image: openspeedtest/latest
+    container_name: openspeedtest
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    ports:
+      - 8118:3000
+      - 8119:3001
+    restart: unless-stopped
+  speedtest:
+    container_name: speedtest
+    image: henrywhitaker3/speedtest-tracker
+    ports:
+      - 8765:80
+    volumes:
+      - ${DOCKERCONFDIR}/speedtest:/config
+    environment:
+      - TZ=${TZ}
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - BASE_PATH=/speedtesttracker
+      - OOKLA_EULA_GDPR=true
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "10"
+          max-size: "200k"
+    restart: unless-stopped
+  acme.sh:
+    image: neilpang/acme.sh
+    container_name: acme.sh
+    command: daemon
+    environment:
+      - DYNV6_TOKEN=${DYNV6_TOKEN}
+    volumes:
+      - ${DOCKERCONFDIR}/acme.sh:/acme.sh
+      - /etc/nginx/certs:/certs
+    network_mode: host
+  telegrambot:
+    image: telegrambot_gpt4free
+    env_file: ./telegrambot_gpt4free/.env
+    container_name: telegrambot_gpt4free
+    build:
+      context: ./telegrambot_gpt4free
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ${DOCKERCONFDIR}/chatbot.db:/app/chatbot.db
+  homepage:
+    image: ghcr.io/benphelps/homepage:latest
+    container_name: homepage
+    ports:
+      - 3001:3000
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    volumes:
+      - ${DOCKERCONFDIR}/homepage:/app/config # Make sure your local config directory exists
+    restart: unless-stopped
+  whatsupdocker:
+    image: fmartinou/whats-up-docker
+    container_name: wud
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 3000:3000
+    environment:
+      - WUD_REGISTRY_LSCR_TOKEN==${WUD_REGISTRY_LSCR_TOKEN}
+      - WUD_REGISTRY_GSCR_TOKEN==${WUD_REGISTRY_GSCR_TOKEN}
+      - WUD_REGISTRY_HUB_TOKEN=${WUD_REGISTRY_HUB_TOKEN}
+    healthcheck:
+      test: wget --no-verbose --tries=1 --no-check-certificate --spider http://localhost:3000
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
