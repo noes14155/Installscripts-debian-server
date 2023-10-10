@@ -1,0 +1,23 @@
+FROM nextcloud:fpm
+
+#SHELL [“/bin/bash”, “-c”]
+#RUN set -euo pipefail
+RUN export DEBIAN_FRONTEND=noninteractive
+#Add www-data user to access shared folder in vbox
+RUN groupadd -g 996 vboxsf
+RUN usermod -aG vboxsf www-data
+#Add user to the render group to access /dev/dri
+RUN groupadd -g $GID render2 || true
+RUN export GROUP=$(getent group $GID | cut -d: -f1) && echo "GROUP=$GROUP" >> /etc/environment
+RUN usermod -aG $(cat /etc/environment | grep GROUP | cut -d'=' -f2) www-data
+RUN sed -i '/exec "\$@"/i chmod 666 \/dev\/dri\/renderD128' /entrypoint.sh
+RUN apt update && apt -y upgrade
+RUN apt -qq -y install git nano ffmpeg exiftool software-properties-common lsb-release ca-certificates apt-transport-https software-properties-common gnupg2 imagemagick imagemagick-common
+# following lines modifiy the policy.xml file to allow PDF
+RUN cp /etc/ImageMagick-6/policy.xml /etc/ImageMagick-6/policy.xml.bak
+RUN sed -i "s/rights\=\"none\" pattern\=\"PS\"/rights\=\"read\|write\" pattern\=\"PS\"/" /etc/ImageMagick-6/policy.xml
+RUN sed -i "s/rights\=\"none\" pattern\=\"EPI\"/rights\=\"read\|write\" pattern\=\"EPI\"/" /etc/ImageMagick-6/policy.xml
+RUN sed -i "s/rights\=\"none\" pattern\=\"PDF\"/rights\=\"read\|write\" pattern\=\"PDF\"/" /etc/ImageMagick-6/policy.xml
+RUN sed -i "s/rights\=\"none\" pattern\=\"XPS\"/rights\=\"read\|write\" pattern\=\"XPS\"/" /etc/ImageMagick-6/policy.xml
+RUN apt clean && apt -y autoremove
+RUN rm -rf /var/lib/apt/lists/*
