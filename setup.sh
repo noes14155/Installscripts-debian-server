@@ -138,13 +138,14 @@ display_tick_mark
 # Install packages
 display_message "Installing packages"
 run_command_silently sudo apt -qq -y install git nginx unzip docker-ce webmin samba apt-transport-https ca-certificates apt-show-versions libapt-pkg-perl libauthen-pam-perl libio-pty-perl libnet-ssleay-perl libhtml-parser-perl
-
+display_tick_mark
 display_message "Installing modules for webmin"
 run_command_silently wget -q https://www.justindhoffman.com/sites/justindhoffman.com/files/nginx-0.10.wbm_.gz -O /home/$USER/nginx.wbm.gz
-sudo /usr/share/webmin/install-module.pl /home/$USER/nginx.wbm.gz
+run_command_silently sudo /usr/share/webmin/install-module.pl /home/$USER/nginx.wbm.gz
 sudo rm /home/$USER/nginx.wbm.gz
 display_tick_mark
 
+display_message "User modifications"
 # Add user to group
 sudo usermod -aG docker ${USER}
 sudo usermod -aG sudo ${USER}
